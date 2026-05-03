@@ -21,3 +21,11 @@ export declare function getAllExchanges(db: Database.Database): Array<{
 }>;
 export declare function getFileLastIndexed(db: Database.Database, archivePath: string): number | null;
 export declare function deleteExchange(db: Database.Database, id: string): void;
+export interface Agent {
+    agent_id: string;
+    description: string | null;
+    created_at: string;
+}
+export declare function registerAgent(db: Database.Database, agentId: string, description?: string): Agent;
+export declare function listAgents(db: Database.Database): Agent[];
+export declare function getAgent(db: Database.Database, agentId: string): Agent | null;

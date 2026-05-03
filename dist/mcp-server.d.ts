@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * MCP Server for Episodic Memory.
+ * MCP Server for Episodic Memory — Shared Multi-Agent Version.
  *
- * This server provides tools to search and explore indexed Claude Code conversations
- * using semantic search, text search, and conversation display capabilities.
+ * SSE transport for network-accessible MCP. Connect any agent via:
+ *   http://localhost:8002/sse
  */
 export {};

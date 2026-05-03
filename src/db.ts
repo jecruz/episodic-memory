@@ -21,6 +21,7 @@ export function migrateSchema(db: Database.Database): void {
     { name: 'thinking_disabled', sql: 'ALTER TABLE exchanges ADD COLUMN thinking_disabled BOOLEAN' },
     { name: 'thinking_triggers', sql: 'ALTER TABLE exchanges ADD COLUMN thinking_triggers TEXT' },
     { name: 'agent_id', sql: 'ALTER TABLE exchanges ADD COLUMN agent_id TEXT' },
+    { name: 'agents', sql: 'CREATE TABLE IF NOT EXISTS agents (agent_id TEXT PRIMARY KEY, description TEXT, created_at TEXT NOT NULL)' },
   ];
 
   let migrated = false;
@@ -167,6 +168,15 @@ export function initDatabase(): Database.Database {
     )
   `);
 
+  // Create agents registry
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agents (
+      agent_id TEXT PRIMARY KEY,
+      description TEXT,
+      created_at TEXT NOT NULL
+    )
+  `);
+
   // Run migrations first
   migrateSchema(db);
 
@@ -291,4 +301,30 @@ export function deleteExchange(db: Database.Database, id: string): void {
 
   // Delete from main table
   db.prepare(`DELETE FROM exchanges WHERE id = ?`).run(id);
+}
+
+export interface Agent {
+  agent_id: string;
+  description: string | null;
+  created_at: string;
+}
+
+export function registerAgent(db: Database.Database, agentId: string, description?: string): Agent {
+  const now = new Date().toISOString();
+  const stmt = db.prepare(`
+    INSERT OR REPLACE INTO agents (agent_id, description, created_at)
+    VALUES (?, ?, ?)
+  `);
+  stmt.run(agentId, description || null, now);
+  return { agent_id: agentId, description: description || null, created_at: now };
+}
+
+export function listAgents(db: Database.Database): Agent[] {
+  const stmt = db.prepare(`SELECT agent_id, description, created_at FROM agents ORDER BY created_at DESC`);
+  return stmt.all() as Agent[];
+}
+
+export function getAgent(db: Database.Database, agentId: string): Agent | null {
+  const stmt = db.prepare(`SELECT agent_id, description, created_at FROM agents WHERE agent_id = ?`);
+  return stmt.get(agentId) as Agent | null;
 }

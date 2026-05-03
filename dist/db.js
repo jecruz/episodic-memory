@@ -17,6 +17,8 @@ export function migrateSchema(db) {
         { name: 'thinking_level', sql: 'ALTER TABLE exchanges ADD COLUMN thinking_level TEXT' },
         { name: 'thinking_disabled', sql: 'ALTER TABLE exchanges ADD COLUMN thinking_disabled BOOLEAN' },
         { name: 'thinking_triggers', sql: 'ALTER TABLE exchanges ADD COLUMN thinking_triggers TEXT' },
+        { name: 'agent_id', sql: 'ALTER TABLE exchanges ADD COLUMN agent_id TEXT' },
+        { name: 'agents', sql: 'CREATE TABLE IF NOT EXISTS agents (agent_id TEXT PRIMARY KEY, description TEXT, created_at TEXT NOT NULL)' },
     ];
     let migrated = false;
     for (const migration of migrations) {
@@ -117,7 +119,8 @@ export function initDatabase() {
       claude_version TEXT,
       thinking_level TEXT,
       thinking_disabled BOOLEAN,
-      thinking_triggers TEXT
+      thinking_triggers TEXT,
+      agent_id TEXT
     )
   `);
     // Create tool_calls table.
@@ -143,6 +146,14 @@ export function initDatabase() {
       embedding FLOAT[384]
     )
   `);
+    // Create agents registry
+    db.exec(`
+    CREATE TABLE IF NOT EXISTS agents (
+      agent_id TEXT PRIMARY KEY,
+      description TEXT,
+      created_at TEXT NOT NULL
+    )
+  `);
     // Run migrations first
     migrateSchema(db);
     // Create indexes (after migrations ensure columns exist)
@@ -162,6 +173,9 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_git_branch ON exchanges(git_branch)
   `);
     db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_agent_id ON exchanges(agent_id)
+  `);
+    db.exec(`
     CREATE INDEX IF NOT EXISTS idx_tool_name ON tool_calls(tool_name)
   `);
     db.exec(`
@@ -175,10 +189,10 @@ export function insertExchange(db, exchange, embedding, toolNames) {
     INSERT OR REPLACE INTO exchanges
     (id, project, timestamp, user_message, assistant_message, archive_path, line_start, line_end, last_indexed,
      parent_uuid, is_sidechain, session_id, cwd, git_branch, claude_version,
-     thinking_level, thinking_disabled, thinking_triggers)
+     thinking_level, thinking_disabled, thinking_triggers, agent_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-    stmt.run(exchange.id, exchange.project, exchange.timestamp, exchange.userMessage, exchange.assistantMessage, exchange.archivePath, exchange.lineStart, exchange.lineEnd, now, exchange.parentUuid || null, exchange.isSidechain ? 1 : 0, exchange.sessionId || null, exchange.cwd || null, exchange.gitBranch || null, exchange.claudeVersion || null, exchange.thinkingLevel || null, exchange.thinkingDisabled ? 1 : 0, exchange.thinkingTriggers || null);
+    stmt.run(exchange.id, exchange.project, exchange.timestamp, exchange.userMessage, exchange.assistantMessage, exchange.archivePath, exchange.lineStart, exchange.lineEnd, now, exchange.parentUuid || null, exchange.isSidechain ? 1 : 0, exchange.sessionId || null, exchange.cwd || null, exchange.gitBranch || null, exchange.claudeVersion || null, exchange.thinkingLevel || null, exchange.thinkingDisabled ? 1 : 0, exchange.thinkingTriggers || null, exchange.agentId || null);
     // Insert into vector table (delete first since virtual tables don't support REPLACE)
     const delStmt = db.prepare(`DELETE FROM vec_exchanges WHERE id = ?`);
     delStmt.run(exchange.id);
@@ -217,4 +231,21 @@ export function deleteExchange(db, id) {
     db.prepare(`DELETE FROM vec_exchanges WHERE id = ?`).run(id);
     // Delete from main table
     db.prepare(`DELETE FROM exchanges WHERE id = ?`).run(id);
+}
+export function registerAgent(db, agentId, description) {
+    const now = new Date().toISOString();
+    const stmt = db.prepare(`
+    INSERT OR REPLACE INTO agents (agent_id, description, created_at)
+    VALUES (?, ?, ?)
+  `);
+    stmt.run(agentId, description || null, now);
+    return { agent_id: agentId, description: description || null, created_at: now };
+}
+export function listAgents(db) {
+    const stmt = db.prepare(`SELECT agent_id, description, created_at FROM agents ORDER BY created_at DESC`);
+    return stmt.all();
+}
+export function getAgent(db, agentId) {
+    const stmt = db.prepare(`SELECT agent_id, description, created_at FROM agents WHERE agent_id = ?`);
+    return stmt.get(agentId);
 }

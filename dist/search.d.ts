@@ -7,6 +7,7 @@ export interface SearchOptions {
     project?: string;
     session_id?: string;
     git_branch?: string;
+    agent_id?: string;
 }
 /**
  * Convert an L2 (Euclidean) distance between two unit-normalized vectors

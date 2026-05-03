@@ -30,13 +30,17 @@ function buildSearchFilters(options) {
         parts.push('e.git_branch = ?');
         params.push(options.git_branch);
     }
+    if (options.agent_id) {
+        parts.push('e.agent_id = ?');
+        params.push(options.agent_id);
+    }
     return {
         sql: parts.length ? `AND ${parts.join(' AND ')}` : '',
         params,
     };
 }
 function hasMetadataFilters(options) {
-    return Boolean(options.project || options.session_id || options.git_branch);
+    return Boolean(options.project || options.session_id || options.git_branch || options.agent_id);
 }
 /**
  * Convert an L2 (Euclidean) distance between two unit-normalized vectors

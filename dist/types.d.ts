@@ -25,6 +25,7 @@ export interface ConversationExchange {
     thinkingLevel?: string;
     thinkingDisabled?: boolean;
     thinkingTriggers?: string;
+    agentId?: string;
     toolCalls?: ToolCall[];
 }
 export interface SearchResult {

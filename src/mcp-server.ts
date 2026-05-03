@@ -7,7 +7,7 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { SseServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -22,7 +22,10 @@ import {
   SearchOptions,
 } from './search.js';
 import { formatConversationAsMarkdown } from './show.js';
+import { initDatabase, registerAgent, listAgents } from './db.js';
 import fs from 'fs';
+
+let db: ReturnType<typeof initDatabase>;
 
 // Zod Schemas for Input Validation
 
@@ -113,6 +116,21 @@ const ShowConversationInputSchema = z
 
 type ShowConversationInput = z.infer<typeof ShowConversationInputSchema>;
 
+const RegisterAgentInputSchema = z
+  .object({
+    agent_id: z.string().min(1).describe('Unique identifier for this agent (e.g. "forge-agent", "blitz-agent")'),
+    description: z.string().optional().describe('Human-readable description of this agent'),
+  })
+  .strict();
+
+type RegisterAgentInput = z.infer<typeof RegisterAgentInputSchema>;
+
+const ListAgentsInputSchema = z
+  .object({})
+  .strict();
+
+type ListAgentsInput = z.infer<typeof ListAgentsInputSchema>;
+
 // Error Handling Utility
 
 function handleError(error: unknown): string {
@@ -123,6 +141,9 @@ function handleError(error: unknown): string {
 }
 
 // Create MCP Server
+
+// Initialize database
+db = initDatabase();
 
 const server = new Server(
   {
@@ -189,6 +210,42 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
         annotations: {
           title: 'Show Full Conversation',
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      {
+        name: 'register_agent',
+        description: `Register this agent with episodic-memory. Call once on first use to announce your presence. Agents must register before indexing conversations so their agent_id is tracked.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            agent_id: { type: 'string', minLength: 1, description: 'Unique identifier for this agent (e.g. "forge-agent", "blitz-agent")' },
+            description: { type: 'string', description: 'Human-readable description of this agent' },
+          },
+          required: ['agent_id'],
+          additionalProperties: false,
+        },
+        annotations: {
+          title: 'Register Agent',
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      {
+        name: 'list_agents',
+        description: `List all registered agents in episodic-memory. Shows agent_id, description, and when they registered.`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false,
+        },
+        annotations: {
+          title: 'List Registered Agents',
           readOnlyHint: true,
           destructiveHint: false,
           idempotentHint: true,
@@ -307,6 +364,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
+    if (name === 'register_agent') {
+      const params = RegisterAgentInputSchema.parse(args);
+      const agent = registerAgent(db, params.agent_id, params.description);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Registered agent: ${agent.agent_id}${agent.description ? ` — ${agent.description}` : ''}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'list_agents') {
+      const agents = listAgents(db);
+      if (agents.length === 0) {
+        return {
+          content: [{ type: 'text', text: 'No agents registered yet.' }],
+        };
+      }
+      const lines = agents.map(a =>
+        `- ${a.agent_id}${a.description ? `: ${a.description}` : ''} (registered ${a.created_at})`
+      ).join('\n');
+      return {
+        content: [{ type: 'text', text: `Registered agents:\n${lines}` }],
+      };
+    }
+
     throw new Error(`Unknown tool: ${name}`);
   } catch (error) {
     // Return errors within the result (not as protocol errors)
@@ -330,7 +415,9 @@ async function main() {
 
   console.error(`Episodic Memory MCP server starting on ${host}:${PORT}`);
 
-  const transport = new SseServerTransport('/sse', '/messages');
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined, // stateless mode
+  });
   await server.connect(transport);
 
   const httpServer = http.createServer((req, res) => {
@@ -339,16 +426,7 @@ async function main() {
       res.end(JSON.stringify({ status: 'ok', service: 'episodic-memory' }));
       return;
     }
-    res.writeHead(404);
-    res.end('Not found');
-  });
-
-  httpServer.on('upgrade', (req, socket, head) => {
-    if (req.url === '/sse') {
-      transport.handleUpgrade(req, socket, head);
-    } else {
-      socket.destroy();
-    }
+    transport.handleRequest(req, res);
   });
 
   httpServer.listen(PORT, host, () => {
