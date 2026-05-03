@@ -32,6 +32,7 @@ export interface ConversationExchange {
   thinkingLevel?: string;
   thinkingDisabled?: boolean;
   thinkingTriggers?: string; // JSON array
+  agentId?: string;
 
   // Tool calls (populated separately)
   toolCalls?: ToolCall[];

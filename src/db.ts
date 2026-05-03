@@ -20,6 +20,7 @@ export function migrateSchema(db: Database.Database): void {
     { name: 'thinking_level', sql: 'ALTER TABLE exchanges ADD COLUMN thinking_level TEXT' },
     { name: 'thinking_disabled', sql: 'ALTER TABLE exchanges ADD COLUMN thinking_disabled BOOLEAN' },
     { name: 'thinking_triggers', sql: 'ALTER TABLE exchanges ADD COLUMN thinking_triggers TEXT' },
+    { name: 'agent_id', sql: 'ALTER TABLE exchanges ADD COLUMN agent_id TEXT' },
   ];
 
   let migrated = false;
@@ -136,7 +137,8 @@ export function initDatabase(): Database.Database {
       claude_version TEXT,
       thinking_level TEXT,
       thinking_disabled BOOLEAN,
-      thinking_triggers TEXT
+      thinking_triggers TEXT,
+      agent_id TEXT
     )
   `);
 
@@ -185,6 +187,9 @@ export function initDatabase(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_git_branch ON exchanges(git_branch)
   `);
   db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_agent_id ON exchanges(agent_id)
+  `);
+  db.exec(`
     CREATE INDEX IF NOT EXISTS idx_tool_name ON tool_calls(tool_name)
   `);
   db.exec(`
@@ -206,7 +211,7 @@ export function insertExchange(
     INSERT OR REPLACE INTO exchanges
     (id, project, timestamp, user_message, assistant_message, archive_path, line_start, line_end, last_indexed,
      parent_uuid, is_sidechain, session_id, cwd, git_branch, claude_version,
-     thinking_level, thinking_disabled, thinking_triggers)
+     thinking_level, thinking_disabled, thinking_triggers, agent_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
@@ -228,7 +233,8 @@ export function insertExchange(
     exchange.claudeVersion || null,
     exchange.thinkingLevel || null,
     exchange.thinkingDisabled ? 1 : 0,
-    exchange.thinkingTriggers || null
+    exchange.thinkingTriggers || null,
+    exchange.agentId || null
   );
 
   // Insert into vector table (delete first since virtual tables don't support REPLACE)

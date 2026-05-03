@@ -79,7 +79,9 @@ export function findJsonlFiles(dir: string, excludedDirNames?: ReadonlySet<strin
 export function getSuperpowersDir(): string {
   let dir: string;
 
-  if (process.env.EPISODIC_MEMORY_CONFIG_DIR) {
+  if (process.env.EPISODIC_SHARED_DIR) {
+    dir = process.env.EPISODIC_SHARED_DIR;
+  } else if (process.env.EPISODIC_MEMORY_CONFIG_DIR) {
     dir = process.env.EPISODIC_MEMORY_CONFIG_DIR;
   } else if (process.env.PERSONAL_SUPERPOWERS_DIR) {
     dir = process.env.PERSONAL_SUPERPOWERS_DIR;
