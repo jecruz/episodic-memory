@@ -334,19 +334,16 @@ async function main() {
   await server.connect(transport);
 
   const httpServer = http.createServer((req, res) => {
-    // Health check endpoint
     if (req.url === '/health' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok', service: 'episodic-memory' }));
       return;
     }
-    // SSE requests handled by SseServerTransport
     res.writeHead(404);
     res.end('Not found');
   });
 
   httpServer.on('upgrade', (req, socket, head) => {
-    // Let SseServerTransport handle SSE upgrades
     if (req.url === '/sse') {
       transport.handleUpgrade(req, socket, head);
     } else {
