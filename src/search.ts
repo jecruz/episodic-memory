@@ -13,6 +13,7 @@ export interface SearchOptions {
   project?: string;     // exact match against e.project
   session_id?: string;  // exact match against e.session_id
   git_branch?: string;  // exact match against e.git_branch
+  agent_id?: string;   // exact match against e.agent_id
 }
 
 /**
@@ -43,6 +44,10 @@ function buildSearchFilters(options: SearchOptions): { sql: string; params: unkn
     parts.push('e.git_branch = ?');
     params.push(options.git_branch);
   }
+  if (options.agent_id) {
+    parts.push('e.agent_id = ?');
+    params.push(options.agent_id);
+  }
   return {
     sql: parts.length ? `AND ${parts.join(' AND ')}` : '',
     params,
@@ -50,7 +55,7 @@ function buildSearchFilters(options: SearchOptions): { sql: string; params: unkn
 }
 
 function hasMetadataFilters(options: SearchOptions): boolean {
-  return Boolean(options.project || options.session_id || options.git_branch);
+  return Boolean(options.project || options.session_id || options.git_branch || options.agent_id);
 }
 
 /**

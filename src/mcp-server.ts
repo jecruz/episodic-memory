@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 /**
- * MCP Server for Episodic Memory.
+ * MCP Server for Episodic Memory — Shared Multi-Agent Version.
  *
- * This server provides tools to search and explore indexed Claude Code conversations
- * using semantic search, text search, and conversation display capabilities.
+ * SSE transport for network-accessible MCP. Connect any agent via:
+ *   http://localhost:8002/sse
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { SseServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import http from 'http';
 import { z } from 'zod';
 import {
   searchConversations,
@@ -76,6 +77,11 @@ const SearchInputSchema = z
       .min(1)
       .optional()
       .describe('Filter by git branch name (exact match)'),
+    agent_id: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('Filter by agent ID (exact match)'),
     response_format: ResponseFormatEnum.default('markdown').describe(
       'Output format: "markdown" for human-readable or "json" for machine-readable (default: "markdown")'
     ),
@@ -154,6 +160,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             project: { type: 'string', minLength: 1, description: 'Filter by project name (exact match)' },
             session_id: { type: 'string', minLength: 1, description: 'Filter by session ID (exact match)' },
             git_branch: { type: 'string', minLength: 1, description: 'Filter by git branch name (exact match)' },
+            agent_id: { type: 'string', minLength: 1, description: 'Filter by agent ID (exact match)' },
             response_format: { type: 'string', enum: ['markdown', 'json'], default: 'markdown' },
           },
           required: ['query'],
@@ -212,6 +219,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           project: params.project,
           session_id: params.session_id,
           git_branch: params.git_branch,
+          agent_id: params.agent_id,
         };
 
         const results = await searchMultipleConcepts(params.query, options);
@@ -239,6 +247,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           project: params.project,
           session_id: params.session_id,
           git_branch: params.git_branch,
+          agent_id: params.agent_id,
         };
 
         const results = await searchConversations(params.query, options);
@@ -316,10 +325,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // Main Function
 
 async function main() {
-  console.error('Episodic Memory MCP server running via stdio');
+  const PORT = parseInt(process.env.EPISODIC_PORT || '8002', 10);
+  const host = process.env.EPIC_HOST || 'localhost';
 
-  const transport = new StdioServerTransport();
+  console.error(`Episodic Memory MCP server starting on ${host}:${PORT}`);
+
+  const transport = new SseServerTransport('/sse', '/messages');
   await server.connect(transport);
+
+  const httpServer = http.createServer((req, res) => {
+    // Health check endpoint
+    if (req.url === '/health' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', service: 'episodic-memory' }));
+      return;
+    }
+    // SSE requests handled by SseServerTransport
+    res.writeHead(404);
+    res.end('Not found');
+  });
+
+  httpServer.on('upgrade', (req, socket, head) => {
+    // Let SseServerTransport handle SSE upgrades
+    if (req.url === '/sse') {
+      transport.handleUpgrade(req, socket, head);
+    } else {
+      socket.destroy();
+    }
+  });
+
+  httpServer.listen(PORT, host, () => {
+    console.error(`Episodic Memory MCP server running at http://${host}:${PORT}/sse`);
+  });
 }
 
 // Run the Server
