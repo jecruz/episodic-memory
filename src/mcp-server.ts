@@ -23,6 +23,7 @@ import {
 } from './search.js';
 import { formatConversationAsMarkdown } from './show.js';
 import { initDatabase, registerAgent, listAgents } from './db.js';
+import { VERSION } from './version.js';
 import fs from 'fs';
 
 let db: ReturnType<typeof initDatabase>;
@@ -148,7 +149,7 @@ db = initDatabase();
 const server = new Server(
   {
     name: 'episodic-memory',
-    version: '1.0.0',
+    version: VERSION,
   },
   {
     capabilities: {

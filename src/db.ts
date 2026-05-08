@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import * as sqliteVec from 'sqlite-vec';
 import { getDbPath } from './paths.js';
+import { EMBEDDING_VERSION } from './embedding-migration.js';
 
 export function migrateSchema(db: Database.Database): void {
   const columns = db.prepare(`SELECT name FROM pragma_table_info('exchanges')`).all() as Array<{ name: string }>;
@@ -22,6 +23,7 @@ export function migrateSchema(db: Database.Database): void {
     { name: 'thinking_triggers', sql: 'ALTER TABLE exchanges ADD COLUMN thinking_triggers TEXT' },
     { name: 'agent_id', sql: 'ALTER TABLE exchanges ADD COLUMN agent_id TEXT' },
     { name: 'agents', sql: 'CREATE TABLE IF NOT EXISTS agents (agent_id TEXT PRIMARY KEY, description TEXT, created_at TEXT NOT NULL)' },
+    { name: 'embedding_version', sql: 'ALTER TABLE exchanges ADD COLUMN embedding_version INTEGER NOT NULL DEFAULT 0' },
   ];
 
   let migrated = false;
@@ -139,7 +141,8 @@ export function initDatabase(): Database.Database {
       thinking_level TEXT,
       thinking_disabled BOOLEAN,
       thinking_triggers TEXT,
-      agent_id TEXT
+      agent_id TEXT,
+      embedding_version INTEGER NOT NULL DEFAULT 0
     )
   `);
 
@@ -221,8 +224,8 @@ export function insertExchange(
     INSERT OR REPLACE INTO exchanges
     (id, project, timestamp, user_message, assistant_message, archive_path, line_start, line_end, last_indexed,
      parent_uuid, is_sidechain, session_id, cwd, git_branch, claude_version,
-     thinking_level, thinking_disabled, thinking_triggers, agent_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     thinking_level, thinking_disabled, thinking_triggers, agent_id, embedding_version)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -244,7 +247,8 @@ export function insertExchange(
     exchange.thinkingLevel || null,
     exchange.thinkingDisabled ? 1 : 0,
     exchange.thinkingTriggers || null,
-    exchange.agentId || null
+    exchange.agentId || null,
+    EMBEDDING_VERSION
   );
 
   // Insert into vector table (delete first since virtual tables don't support REPLACE)
